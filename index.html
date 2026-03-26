@@ -366,7 +366,6 @@
                                     <th><i class="fa-solid fa-apple-whole"></i> Fruit Type</th>
                                     <th><i class="fa-solid fa-heart-pulse"></i> Status</th>
                                     <th><i class="fa-solid fa-percent"></i> AI Confidence</th>
-                                    <th><i class="fa-solid fa-video"></i> Camera</th>
                                 </tr>
                             </thead>
                             <tbody id="tableBody">
@@ -383,9 +382,7 @@
     </footer>
 
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
-    
-    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/detection@0.8/dist/teachablemachine-detection.min.js"></script>
-    
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
     <script src="https://unpkg.com/parse/dist/parse.min.js"></script>
     <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
 
@@ -397,16 +394,14 @@
         );
         Parse.serverURL = 'https://pg-app-s4xeiqcvd9vyl5lycfvuzz49fbtelr.scalabl.cloud/1/';
 
-        // --- IMPORTANT: Update this URL to point to your new Object Detection model ---
-        // Right now this points to your old classification model, so it won't work.
-        // You must train a Detection model and put its URL here.
+        // --- Teachable Machine Model URL ---
         const URL = "https://teachablemachine.withgoogle.com/models/N58PlX_GN/";
 
-        let detectionModel, detectionWebcam, labelContainer, camera_on = false, image_upload = false;
+        let model, webcam, newlabel, canvas, labelContainer, maxPredictions, camera_on = false, image_upload = false;
         let currentCameraType = 'environment'; // 'user' for front, 'environment' for back
 
         // --- Data Logging Variables ---
-        let currentPredictionsData = []; // Array to hold multiple detections
+        let currentPredictionData = null; 
         let scanHistory = [];
 
         // --- Camera Functions ---
@@ -426,12 +421,12 @@
 
         function stopCamera() {
             camera_on = false;
-            if (detectionWebcam) {
-                detectionWebcam.stop();
+            if (webcam) {
+                webcam.stop();
                 document.getElementById("webcam-container").innerHTML = '';
             }
-            if (labelContainer) {
-                labelContainer.innerHTML = '';
+            if (labelContainer && labelContainer.contains(newlabel)) {
+                labelContainer.removeChild(newlabel);
             }
             document.getElementById("camera-status").style.display = 'none';
             document.getElementById("action-buttons").style.display = "none";
@@ -462,8 +457,6 @@
         async function initCamera() {
             camera_on = true;
             document.getElementById("action-buttons").style.display = "block";
-            labelContainer = document.getElementById("label-container");
-            labelContainer.innerHTML = '';
             await init();
         }
 
@@ -471,169 +464,92 @@
             const modelURL = URL + "model.json";
             const metadataURL = URL + "metadata.json";
 
-            // Load detection model
-            detectionModel = await detection.load(modelURL, metadataURL);
+            model = await tmImage.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
 
-            // Set up detection webcam with facing mode
-            detectionWebcam = new detection.Webcam(400, 400); // Larger size for mobile
-            await detectionWebcam.setup({ facingMode: currentCameraType }); 
-            await detectionWebcam.play();
+            const flip = currentCameraType === 'user'; // Flip only for front camera
+            webcam = new tmImage.Webcam(400, 400, flip); // Larger size for better mobile experience
+            
+            // Fix: properly pass the facing mode to the TM library
+            await webcam.setup({ facingMode: currentCameraType }); 
+            await webcam.play();
             window.requestAnimationFrame(loop);
 
-            document.getElementById("webcam-container").appendChild(detectionWebcam.canvas);
+            document.getElementById("webcam-container").appendChild(webcam.canvas);
+
+            newlabel = document.createElement("div");
+            labelContainer = document.getElementById("label-container");
+            if (labelContainer.contains(newlabel)) {
+                labelContainer.removeChild(newlabel);
+            }
+            labelContainer.appendChild(newlabel);
         }
 
         async function loop() {
-            if (camera_on && detectionWebcam) {
-                await detectionWebcam.update(); 
-                
-                // Get predictions for the current frame
-                const predictions = await detectionModel.detect(detectionWebcam.canvas);
-                
-                // --- CUSTOM DRAWING LOGIC ---
-                // Draw the boxes and labels directly on the webcam canvas
-                drawPredictions(detectionWebcam.canvas, predictions);
-                
-                // Update the UI labels list
-                updatePredictionLabels(predictions);
+            if (camera_on && webcam) {
+                webcam.update(); 
+                await predict(webcam.canvas);
             }
             window.requestAnimationFrame(loop);
         }
 
         // --- Prediction Logic ---
-        function updatePredictionLabels(predictions) {
-            labelContainer.innerHTML = '';
-            currentPredictionsData = []; // Clear for new frame
+        async function predict(input) {
+            const prediction = await model.predict(input);
+
+            var highestVal = 0.00;
+            var bestClass = "";
+            result = document.getElementById("label-container");
             
-            // Limit to top 3 detections to avoid UI clutter
-            const topPredictions = predictions.slice(0, 3);
-            
-            if (topPredictions.length === 0) {
-                labelContainer.innerHTML = "<div class='alert alert-secondary mt-3 p-3'><i class='fa-solid fa-magnifying-glass'></i> Scanning for fruits...</div>";
-                return;
+            for (let i = 0; i < maxPredictions; i++) {
+                var classPrediction = prediction[i].probability.toFixed(2);
+                if (classPrediction > highestVal) {
+                    highestVal = classPrediction;
+                    bestClass = prediction[i].className;
+                }
             }
 
-            topPredictions.forEach(prediction => {
-                const { className, probability, bbox } = prediction;
-                let highestVal = probability;
-                let bestClass = className;
-                
-                let newlabel = document.createElement("div");
-                
-                // Custom styling for the prediction alert based on "Fresh" or "Rotten"
-                // This assumes your object detection labels contain the word "Fresh"
-                if (bestClass.includes("Fresh")) {
-                    newlabel.className = "alert alert-success mt-2 p-2";
-                    newlabel.innerHTML = `<i class="fa-solid fa-circle-check"></i> Detected: <strong>${bestClass}</strong> (${(highestVal*100).toFixed(0)}%)`;
-                } else {
-                    newlabel.className = "alert alert-danger mt-2 p-2";
-                    newlabel.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Detected: <strong>${bestClass}</strong> (${(highestVal*100).toFixed(0)}%)`;
-                }
-                
-                labelContainer.appendChild(newlabel);
+            // Custom styling for the prediction alert
+            if (bestClass == "Fresh Banana" || bestClass == "Fresh Apple" || bestClass == "Fresh Orange") {
+                newlabel.className = "alert alert-success mt-3 p-3";
+                newlabel.innerHTML = `<i class="fa-solid fa-circle-check"></i> Detected: <strong>${bestClass}</strong> (${(highestVal*100).toFixed(1)}%)`;
+            }
+            else {
+                newlabel.className = "alert alert-danger mt-3 p-3";
+                newlabel.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Detected: <strong>${bestClass}</strong> (${(highestVal*100).toFixed(1)}%)`;
+            }
 
-                // Store prediction data for database logging
-                let parts = bestClass.split(" ");
-                let status = parts[0]; 
-                let fruit = parts.length > 1 ? parts.slice(1).join(" ") : "Unknown";
+            // Store prediction in memory
+            let parts = bestClass.split(" ");
+            let status = parts[0]; 
+            let fruit = parts.length > 1 ? parts[1] : "Unknown";
 
-                currentPredictionsData.push({
-                    fruit: fruit,
-                    status: status,
-                    confidence: highestVal,
-                    camera: currentCameraType === 'environment' ? 'Back' : 'Front'
-                });
-            });
+            currentPredictionData = {
+                fruit: fruit,
+                status: status,
+                confidence: highestVal,
+                camera: currentCameraType === 'environment' ? 'Back' : 'Front'
+            };
         }
 
-        // --- IMPORTANT: THIS FUNCTION DRAWS THE BOXES & LABELS ---
-        function drawPredictions(canvas, predictions) {
-            const ctx = canvas.getContext('2d');
-            
-            // Clear previous drawings without erasing the video feed
-            ctx.clearRect(0, 0, canvas.width, canvas.height); 
-            // Re-draw the video frame back onto the canvas
-            ctx.drawImage(detectionWebcam.video, 0, 0, canvas.width, canvas.height);
-
-            // Font setting (Poppins bold)
-            ctx.font = 'bold 16px Poppins, sans-serif';
-            ctx.textBaseline = 'top'; // Align text top-left
-
-            predictions.forEach(prediction => {
-                const [x, y, width, height] = prediction.bbox;
-                const label = `${prediction.className} (${(prediction.probability * 100).toFixed(0)}%)`;
-                
-                // --- Match the visual style from your example image ---
-
-                // 1. Draw the Blue Box (Deep blue color)
-                ctx.strokeStyle = '#283593'; // Deep blue
-                ctx.lineWidth = 4; // Thick box
-                ctx.strokeRect(x, y, width, height);
-
-                // 2. Draw the Blue Label Background Block
-                ctx.fillStyle = '#283593'; // Match box color
-                const textWidth = ctx.measureText(label).width;
-                const textHeight = 22; // Height of the text block
-                
-                // Draw filled rectangle just above the bounding box
-                ctx.fillRect(x - 2, y - textHeight - 2, textWidth + 10, textHeight + 4); 
-
-                // 3. Draw the White Text inside the block
-                ctx.fillStyle = 'white'; // White text color
-                // Draw text with a slight outline for better readability
-                ctx.lineWidth = 1;
-                ctx.strokeStyle = 'black'; 
-                ctx.strokeText(label, x + 5, y - textHeight + 2); // Text outline
-                ctx.fillText(label, x + 5, y - textHeight + 2); // Fill text
-            });
-        }
-
-        // --- Image Upload Functions (Updated for Detection) ---
+        // --- Image Upload Functions (Original Parse Logic) ---
         let img;
-        async function getPredictionsForImage() {
-            // Create a temporary canvas for the uploaded image
+        async function getPredictions() {
             canvas = document.createElement("canvas");
             var context = canvas.getContext("2d");
-            canvas.width = 400;
-            canvas.height = 400;
+            canvas.width = "400";
+            canvas.height = "400";
             context.drawImage(img, 0, 0, 400, 400);
-            
-            // Detect objects in the image
-            const predictions = await detectionModel.detect(canvas);
-            
-            // Draw boxes/labels onto this image canvas
-            // We use a simplified draw logic that doesn't clear the frame, just draws on top
-            const ctx = canvas.getContext('2d');
-            ctx.font = 'bold 16px Poppins, sans-serif';
-            ctx.textBaseline = 'top';
-            predictions.forEach(prediction => {
-                const [x, y, width, height] = prediction.bbox;
-                const label = `${prediction.className} (${(prediction.probability * 100).toFixed(0)}%)`;
-                
-                // Box
-                ctx.strokeStyle = '#283593';
-                ctx.lineWidth = 4;
-                ctx.strokeRect(x, y, width, height);
-                
-                // Label block
-                ctx.fillStyle = '#283593';
-                const textWidth = ctx.measureText(label).width;
-                const textHeight = 22;
-                ctx.fillRect(x - 2, y - textHeight - 2, textWidth + 10, textHeight + 4);
-                
-                // White text
-                ctx.fillStyle = 'white';
-                ctx.lineWidth = 1; ctx.strokeStyle = 'black'; 
-                ctx.strokeText(label, x + 5, y - textHeight + 2);
-                ctx.fillText(label, x + 5, y - textHeight + 2);
-            });
-
-            // Display the final processed image canvas
             document.getElementById("uploadedImage").appendChild(canvas);
 
-            // Update UI lists
+            newlabel = document.createElement("div");
             labelContainer = document.getElementById("label-container");
-            updatePredictionLabels(predictions);
+            if (labelContainer.contains(newlabel)) {
+                labelContainer.removeChild(newlabel);
+            }
+            labelContainer.appendChild(newlabel);
+
+            await predict(canvas);
         }
 
         $(document).ready(function () {
@@ -641,68 +557,65 @@
                 labelContainer = document.getElementById("label-container");
                 image_upload = !image_upload;
 
-                // Stop live camera to prevent conflicts
-                if (camera_on) stopCamera();
-
                 if (!image_upload) {
-                    labelContainer.innerHTML = '';
-                    document.getElementById("uploadedImage").innerHTML = '';
+                    if(labelContainer.contains(newlabel)) {
+                        labelContainer.removeChild(newlabel);
+                    }
+                    if(document.getElementById("uploadedImage").contains(canvas)){
+                        document.getElementById("uploadedImage").removeChild(canvas);
+                    }
                 }
 
                 const fileUploadControl = $("#fruitimg")[0];
                 if (fileUploadControl.files.length > 0) {
+                    
                     document.getElementById("action-buttons").style.display = "block";
 
                     const modelURL = URL + "model.json";
                     const metadataURL = URL + "metadata.json";
 
-                    // Load detection model
-                    detectionModel = await detection.load(modelURL, metadataURL);
+                    model = await tmImage.load(modelURL, metadataURL);
+                    maxPredictions = model.getTotalClasses();
 
                     const file = fileUploadControl.files[0];
                     const name = "photo.jpg";
                     const parseFile = new Parse.File(name, file);
 
-                    // Save to Parse, then predict the image canvas
                     parseFile.save().then(async function () {
                         img = new Image();
                         img.crossOrigin = "Anonymous";
-                        img.addEventListener("load", getPredictionsForImage, false);
+                        img.addEventListener("load", getPredictions, false);
                         img.src = parseFile.url();
                     }, function (error) {
                         labelContainer.innerHTML = "<div class='alert alert-danger'>Uploading your image failed!</div>";
                     });
-                } else {
+                }
+                else {
                     labelContainer.innerHTML = "<div class='alert alert-danger'>Please select an image first!</div>";
                 }
             });
 
             // --- Data Logging & Export Events ---
             $("#scanBtn").on("click", function() {
-                // Log all currently visible detections
-                if(currentPredictionsData.length > 0) {
+                if(currentPredictionData) {
+                    scanHistory.push(currentPredictionData);
                     
                     $("#resultsTable").show();
                     let tbody = $("#tableBody");
                     
-                    currentPredictionsData.forEach(data => {
-                        scanHistory.push(data); // Add to export list
-                        
-                        let confPercent = (data.confidence * 100).toFixed(0) + "%";
-                        let cameraUsed = data.camera || 'Unknown';
-                        
-                        // Style based on "Fresh" or "Rotten"
-                        let statusColor = data.status === 'Fresh' ? 'color: var(--primary); font-weight: 800;' : 'color: var(--danger); font-weight: 800;';
+                    let confPercent = (currentPredictionData.confidence * 100).toFixed(0) + "%";
+                    let cameraUsed = currentPredictionData.camera || 'Unknown';
+                    
+                    // Custom styling for table text based on status
+                    let statusColor = currentPredictionData.status === 'Fresh' ? 'color: var(--primary); font-weight: 800;' : 'color: var(--danger); font-weight: 800;';
 
-                        let newRow = `<tr>
-                            <td style="font-weight: 600;">${data.fruit}</td>
-                            <td style="${statusColor}">${data.status}</td>
-                            <td>${confPercent}</td>
-                            <td style="color: var(--secondary); font-size: 0.85rem;">${cameraUsed}</td>
-                        </tr>`;
-                        
-                        tbody.append(newRow);
-                    });
+                    let newRow = `<tr>
+                        <td style="font-weight: 600;">${currentPredictionData.fruit}</td>
+                        <td style="${statusColor}">${currentPredictionData.status}</td>
+                        <td>${confPercent}</td>
+                    </tr>`;
+                    
+                    tbody.append(newRow);
                 } else {
                     alert("Please wait for the model to detect a fruit first.");
                 }
@@ -735,9 +648,9 @@
 
             // Handle window resize for better mobile experience
             $(window).resize(function() {
-                if (detectionWebcam && camera_on) {
-                    detectionWebcam.canvas.width = Math.min(window.innerWidth * 0.8, 400);
-                    detectionWebcam.canvas.height = Math.min(window.innerWidth * 0.8, 400);
+                if (webcam && camera_on) {
+                    webcam.canvas.width = Math.min(window.innerWidth * 0.8, 400);
+                    webcam.canvas.height = Math.min(window.innerWidth * 0.8, 400);
                 }
             });
         });
