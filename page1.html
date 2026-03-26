@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fruitector | AI Fruit Analysis</title>
+    <!-- Google Fonts -->
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;800&display=swap" rel="stylesheet">
+    <!-- Font Awesome for Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
+    <style>
+        /* --- CSS Variables & Reset --- */
+        :root {
+            --primary: #00ff88;
+            --secondary: #ff9900;
+            --bg-dark: #0a0a0a;
+            --text-light: #ffffff;
+            --text-muted: #a0a0a0;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            font-family: 'Poppins', sans-serif;
+        }
+
+        body {
+            background-color: var(--bg-dark);
+            color: var(--text-light);
+            overflow-x: hidden;
+        }
+
+        /* --- Animations --- */
+        @keyframes fadeIn {
+            0% { opacity: 0; transform: translateY(30px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+
+        @keyframes pulseGlow {
+            0% { box-shadow: 0 0 15px rgba(0, 255, 136, 0.2); }
+            50% { box-shadow: 0 0 30px rgba(0, 255, 136, 0.6); }
+            100% { box-shadow: 0 0 15px rgba(0, 255, 136, 0.2); }
+        }
+
+        .fade-in-element {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 1s ease-out, transform 1s ease-out;
+        }
+
+        .fade-in-element.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* --- Hero Section --- */
+        .hero {
+            position: relative;
+            height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 0 20px;
+            /* High-quality background image with dark overlay */
+            background: linear-gradient(rgba(10, 10, 10, 0.8), rgba(10, 10, 10, 0.95)), 
+                        url('https://images.unsplash.com/photo-1610832958506-aa56368176cf?q=80&w=2070&auto=format&fit=crop') center/cover;
+        }
+
+        .hero-content {
+            max-width: 800px;
+            z-index: 2;
+        }
+
+        .hero h1 {
+            font-size: 4rem;
+            font-weight: 800;
+            margin-bottom: 15px;
+            background: linear-gradient(45deg, var(--primary), var(--secondary));
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            animation: fadeIn 1.5s ease-out forwards;
+        }
+
+        .hero p {
+            font-size: 1.2rem;
+            color: var(--text-muted);
+            margin-bottom: 40px;
+            line-height: 1.6;
+            animation: fadeIn 1.5s ease-out 0.5s forwards;
+            opacity: 0;
+        }
+
+        .cta-buttons {
+            animation: fadeIn 1.5s ease-out 1s forwards;
+            opacity: 0;
+            display: flex;
+            gap: 20px;
+            justify-content: center;
+        }
+
+        .btn {
+            padding: 15px 35px;
+            border-radius: 30px;
+            font-size: 1.1rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.3s ease;
+            cursor: pointer;
+            border: none;
+        }
+
+        .btn-primary {
+            background-color: var(--primary);
+            color: var(--bg-dark);
+            animation: pulseGlow 2s infinite;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            background-color: #00cc6e;
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.1);
+            color: var(--text-light);
+            backdrop-filter: blur(10px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: translateY(-3px);
+        }
+
+        /* --- Features Section (Glassmorphism) --- */
+        .features {
+            padding: 100px 20px;
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 60px;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 30px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.03);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 40px 30px;
+            text-align: center;
+            transition: transform 0.3s ease, background 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-10px);
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(0, 255, 136, 0.3);
+        }
+
+        .card i {
+            font-size: 3rem;
+            color: var(--primary);
+            margin-bottom: 20px;
+        }
+
+        .card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 15px;
+        }
+
+        .card p {
+            color: var(--text-muted);
+            font-size: 0.95rem;
+            line-height: 1.5;
+        }
+
+        /* --- Footer --- */
+        footer {
+            text-align: center;
+            padding: 30px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-muted);
+            font-size: 0.9rem;
+        }
+
+        /* --- Responsive --- */
+        @media (max-width: 768px) {
+            .hero h1 { font-size: 2.8rem; }
+            .hero p { font-size: 1rem; }
+            .cta-buttons { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <h1>Welcome to Fruitector</h1>
+            <p>
+                AI-Powered Fruit Quality Detection. Instantly identify whether your Bananas, Oranges, or Apples are fresh, rotten, ripe, or raw. Scan for defects using your mobile or PC, and seamlessly export your data to Excel with absolute precision.
+            </p>
+            <div class="cta-buttons">
+                <a href="index.html" class="btn btn-primary"><i class="fa-solid fa-camera"></i> Start Scanning</a>
+                <a href="#features" class="btn btn-secondary">Learn More</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <h2 class="section-title fade-in-element">Why Choose Fruitector?</h2>
+        
+        <div class="grid">
+            <!-- Feature 1 -->
+            <div class="card fade-in-element">
+                <i class="fa-solid fa-apple-whole"></i>
+                <h3>Quality Detection</h3>
+                <p>Instantly classify fruits as Fresh, Rotten, Ripe, or Raw using advanced AI image recognition.</p>
+            </div>
+
+            <!-- Feature 2 -->
+            <div class="card fade-in-element">
+                <i class="fa-solid fa-magnifying-glass-chart"></i>
+                <h3>Defect Identification</h3>
+                <p>Spot bruises, blemishes, and defects on Bananas, Oranges, and Apples before they hit the shelves.</p>
+            </div>
+
+            <!-- Feature 3 -->
+            <div class="card fade-in-element">
+                <i class="fa-solid fa-mobile-screen-button"></i>
+                <h3>Cross-Platform</h3>
+                <p>Use your mobile phone camera on the go, or connect a webcam to your PC for stationary scanning.</p>
+            </div>
+
+            <!-- Feature 4 -->
+            <div class="card fade-in-element">
+                <i class="fa-solid fa-file-excel"></i>
+                <h3>Excel Integration</h3>
+                <p>Automatically log your scanning results and export them directly to Excel for precise data management.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <p>&copy; 2023 Fruitector. All rights reserved. | AI Fruit Analysis</p>
+    </footer>
+
+    <!-- JavaScript for Scroll Animations -->
+    <script>
+        document.addEventListener("DOMContentLoaded", function() {
+            // Select all elements with the class 'fade-in-
