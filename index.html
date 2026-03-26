@@ -5,11 +5,8 @@
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     
-    <!-- Bootstrap (Kept for grid system, but heavily customized for dark theme) -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.0.1/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Google Fonts -->
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;600;800&display=swap" rel="stylesheet">
-    <!-- Font Awesome for Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     
     <link rel="icon" href="Images/logo.png">
@@ -304,7 +301,6 @@
 </head>
 
 <body>
-    <!-- Navigation Bar -->
     <nav class="custom-nav">
         <a href="page1.html" class="logo"><i class="fa-solid fa-leaf"></i> Fruitector</a>
         <ul class="nav-links">
@@ -314,19 +310,16 @@
         </ul>
     </nav>
 
-    <!-- Main App Container -->
     <div class="container" id="main">
         <div class="row justify-content-center">
             <div class="col-lg-10 col-md-12">
                 
-                <!-- Glass Panel Container -->
                 <div class="glass-panel">
                     <h3 class="app-title" id="detect">AI Fruit Quality Detection</h3>
                     <p class="app-desc">
                         Identify defects and freshness in <span class="highlight-banana">Bananas</span>, <span class="highlight-orange">Oranges</span>, or <span class="highlight-apple">Apples</span>. Use your webcam for live scanning or upload an image for instant analysis.
                     </p>
 
-                    <!-- Webcam Control Section -->
                     <div class="control-section">
                         <label class="control-label"><i class="fa-solid fa-video"></i> LIVE SCANNER</label>
                         <div class="camera-buttons">
@@ -344,7 +337,6 @@
                         <div id="camera-status" class="mt-2 text-center" style="font-weight: 600; color: var(--primary); display: none;"></div>
                     </div>
 
-                    <!-- Image Upload Control Section -->
                     <div class="control-section">
                         <label class="control-label" for="fruitimg"><i class="fa-solid fa-cloud-arrow-up"></i> UPLOAD IMAGE</label>
                         <div class="input-group" id="inputimg">
@@ -356,10 +348,8 @@
                         <div id="uploadedImage" class="text-center mt-3"></div>
                     </div>
 
-                    <!-- Prediction Result Label -->
                     <div id="label-container" class="mt-4"></div>
 
-                    <!-- Action Buttons (Hidden until scan) -->
                     <div class="mt-4 text-center" id="action-buttons" style="display: none;">
                         <button id="scanBtn" class="btn-custom btn-glow-primary">
                             <i class="fa-solid fa-camera-retro"></i> Record Scan
@@ -369,7 +359,6 @@
                         </button>
                     </div>
                     
-                    <!-- Data Table -->
                     <div class="table-responsive mt-4">
                         <table class="table table-custom table-bordered" id="resultsTable">
                             <thead>
@@ -380,22 +369,18 @@
                                 </tr>
                             </thead>
                             <tbody id="tableBody">
-                                <!-- Rows will be added here via JS -->
-                            </tbody>
+                                </tbody>
                         </table>
                     </div>
 
-                </div> <!-- End Glass Panel -->
-            </div>
+                </div> </div>
         </div>
     </div>
 
-    <!-- Footer -->
     <footer>
         <p>&copy; 2023 Fruitector. All rights reserved. | AI Fruit Analysis</p>
     </footer>
 
-    <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/image@0.8/dist/teachablemachine-image.min.js"></script>
     <script src="https://unpkg.com/parse/dist/parse.min.js"></script>
@@ -421,12 +406,14 @@
 
         // --- Camera Functions ---
         async function useFrontCamera() {
+            if (camera_on) stopCamera(); // Fix: Stop any running camera first
             currentCameraType = 'user'; // Front camera
             await initCamera();
             updateCameraButtons('front');
         }
 
         async function useBackCamera() {
+            if (camera_on) stopCamera(); // Fix: Stop any running camera first
             currentCameraType = 'environment'; // Back camera
             await initCamera();
             updateCameraButtons('back');
@@ -456,7 +443,7 @@
                 document.getElementById("frontCameraBtn").classList.add('active');
                 document.getElementById("frontCameraBtn").innerHTML = '<i class="fa-solid fa-camera"></i> Front Camera <i class="fa-solid fa-circle" style="color: var(--primary);"></i>';
                 document.getElementById("stopCameraBtn").style.display = 'inline-flex';
-                document.getdocument.getElementById("camera-status").innerHTML = '<i class="fa-solid fa-camera"></i> Front Camera Active';
+                document.getElementById("camera-status").innerHTML = '<i class="fa-solid fa-camera"></i> Front Camera Active';
                 document.getElementById("camera-status").style.display = 'block';
             } else if (activeCamera === 'back') {
                 document.getElementById("backCameraBtn").classList.add('active');
@@ -480,17 +467,11 @@
             model = await tmImage.load(modelURL, metadataURL);
             maxPredictions = model.getTotalClasses();
 
-            const flip = currentCameraType === 'user'; // Flip for front camera
+            const flip = currentCameraType === 'user'; // Flip only for front camera
             webcam = new tmImage.Webcam(400, 400, flip); // Larger size for better mobile experience
             
-            // Set facing mode for mobile cameras
-            webcam.videoConstraints = {
-                width: 400,
-                height: 400,
-                facingMode: currentCameraType // 'user' or 'environment'
-            };
-            
-            await webcam.setup(); 
+            // Fix: properly pass the facing mode to the TM library
+            await webcam.setup({ facingMode: currentCameraType }); 
             await webcam.play();
             window.requestAnimationFrame(loop);
 
@@ -551,7 +532,7 @@
             };
         }
 
-        // --- Image Upload Functions ---
+        // --- Image Upload Functions (Original Parse Logic) ---
         let img;
         async function getPredictions() {
             canvas = document.createElement("canvas");
@@ -632,7 +613,6 @@
                         <td style="font-weight: 600;">${currentPredictionData.fruit}</td>
                         <td style="${statusColor}">${currentPredictionData.status}</td>
                         <td>${confPercent}</td>
-                        <td style="color: var(--secondary); font-size: 0.85rem;">${cameraUsed}</td>
                     </tr>`;
                     
                     tbody.append(newRow);
