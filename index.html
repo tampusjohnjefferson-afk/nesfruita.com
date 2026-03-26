@@ -149,7 +149,7 @@
         }
 
         .btn-custom {
-            padding: 10px 25px;
+            padding: 12px 25px;
             border-radius: 30px;
             font-weight: 600;
             border: none;
@@ -158,6 +158,7 @@
             display: inline-flex;
             align-items: center;
             gap: 8px;
+            font-size: 0.95rem;
         }
 
         .btn-glow-primary {
@@ -165,14 +166,39 @@
             color: var(--bg-dark);
             box-shadow: 0 0 15px rgba(0, 255, 136, 0.3);
         }
-        .btn-glow-primary:hover { background: #00cc6e; transform: translateY(-2px); }
+        .btn-glow-primary:hover, .btn-glow-primary.active { 
+            background: #00cc6e; 
+            transform: translateY(-2px); 
+        }
 
         .btn-glow-secondary {
             background: var(--secondary);
             color: var(--bg-dark);
             box-shadow: 0 0 15px rgba(255, 153, 0, 0.3);
         }
-        .btn-glow-secondary:hover { background: #e68a00; transform: translateY(-2px); }
+        .btn-glow-secondary:hover, .btn-glow-secondary.active { 
+            background: #e68a00; 
+            transform: translateY(-2px); 
+        }
+
+        .btn-glow-danger {
+            background: var(--danger);
+            color: var(--bg-dark);
+            box-shadow: 0 0 15px rgba(255, 51, 102, 0.3);
+        }
+        .btn-glow-danger:hover { 
+            background: #e62e5a; 
+            transform: translateY(-2px); 
+        }
+
+        /* Camera Buttons Container */
+        .camera-buttons {
+            display: flex;
+            gap: 15px;
+            justify-content: center;
+            flex-wrap: wrap;
+            margin-top: 15px;
+        }
 
         /* Custom File Input */
         .custom-file-input {
@@ -193,6 +219,9 @@
             box-shadow: 0 0 20px rgba(0, 255, 136, 0.2);
             margin-top: 15px;
             max-width: 100%;
+            max-height: 400px;
+            width: auto;
+            height: auto;
         }
 
         /* --- Prediction Alerts --- */
@@ -242,7 +271,7 @@
         /* --- Footer --- */
         footer {
             text-align: center;
-                        padding: 30px;
+            padding: 30px;
             border-top: 1px solid var(--glass-border);
             color: var(--text-muted);
             font-size: 0.9rem;
@@ -257,8 +286,19 @@
             .glass-panel { padding: 20px; }
             .app-title { font-size: 1.5rem; }
             .btn-custom { width: 100%; justify-content: center; margin-bottom: 10px; }
+            .camera-buttons { flex-direction: column; gap: 10px; }
             #action-buttons { display: flex; flex-direction: column; gap: 10px; }
             #action-buttons .ms-2 { margin-left: 0 !important; }
+            #webcam-container canvas, #uploadedImage canvas {
+                max-height: 300px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .camera-buttons .btn-custom {
+                padding: 15px 20px;
+                font-size: 1rem;
+            }
         }
     </style>
 </head>
@@ -288,11 +328,20 @@
 
                     <!-- Webcam Control Section -->
                     <div class="control-section">
-                        <label for="webcam" class="control-label"><i class="fa-solid fa-video"></i> LIVE SCANNER</label>
-                        <button id="webcam" type="button" class="btn-custom btn-glow-primary" onclick="useWebcam()">
-                            <i class="fa-solid fa-power-off"></i> Start Webcam
-                        </button>
+                        <label class="control-label"><i class="fa-solid fa-video"></i> LIVE SCANNER</label>
+                        <div class="camera-buttons">
+                            <button id="frontCameraBtn" type="button" class="btn-custom btn-glow-primary" onclick="useFrontCamera()">
+                                <i class="fa-solid fa-camera"></i> Front Camera
+                            </button>
+                            <button id="backCameraBtn" type="button" class="btn-custom btn-glow-secondary" onclick="useBackCamera()">
+                                <i class="fa-solid fa-camera-retro"></i> Back Camera
+                            </button>
+                            <button id="stopCameraBtn" type="button" class="btn-custom btn-glow-danger" onclick="stopCamera()" style="display: none;">
+                                <i class="fa-solid fa-power-off"></i> Stop Camera
+                            </button>
+                        </div>
                         <div id="webcam-container" class="text-center mt-3"></div>
+                        <div id="camera-status" class="mt-2 text-center" style="font-weight: 600; color: var(--primary); display: none;"></div>
                     </div>
 
                     <!-- Image Upload Control Section -->
@@ -364,35 +413,64 @@
         const URL = "https://teachablemachine.withgoogle.com/models/N58PlX_GN/";
 
         let model, webcam, newlabel, canvas, labelContainer, maxPredictions, camera_on = false, image_upload = false;
+        let currentCameraType = 'environment'; // 'user' for front, 'environment' for back
 
         // --- Data Logging Variables ---
         let currentPredictionData = null; 
         let scanHistory = [];
 
-        // --- Webcam Functions ---
-        function useWebcam() {
-            camera_on = !camera_on;
+        // --- Camera Functions ---
+        async function useFrontCamera() {
+            currentCameraType = 'user'; // Front camera
+            await initCamera();
+            updateCameraButtons('front');
+        }
 
-            if (camera_on) {
-                init();
-                document.getElementById("webcam").innerHTML = '<i class="fa-solid fa-xmark"></i> Close Webcam';
-                document.getElementById("webcam").classList.replace('btn-glow-primary', 'btn-glow-secondary');
-                document.getElementById("action-buttons").style.display = "block";
+        async function useBackCamera() {
+            currentCameraType = 'environment'; // Back camera
+            await initCamera();
+            updateCameraButtons('back');
+        }
+
+        function stopCamera() {
+            camera_on = false;
+            if (webcam) {
+                webcam.stop();
+                document.getElementById("webcam-container").innerHTML = '';
             }
-            else {
-                stopWebcam();
-                document.getElementById("webcam").innerHTML = '<i class="fa-solid fa-power-off"></i> Start Webcam';
-                document.getElementById("webcam").classList.replace('btn-glow-secondary', 'btn-glow-primary');
-                document.getElementById("action-buttons").style.display = "none";
+            if (labelContainer && labelContainer.contains(newlabel)) {
+                labelContainer.removeChild(newlabel);
+            }
+            document.getElementById("camera-status").style.display = 'none';
+            document.getElementById("action-buttons").style.display = "none";
+            updateCameraButtons('none');
+        }
+
+        function updateCameraButtons(activeCamera) {
+            // Reset all buttons
+            document.getElementById("frontCameraBtn").classList.remove('active');
+            document.getElementById("backCameraBtn").classList.remove('active');
+            document.getElementById("stopCameraBtn").style.display = 'none';
+
+            if (activeCamera === 'front') {
+                document.getElementById("frontCameraBtn").classList.add('active');
+                document.getElementById("frontCameraBtn").innerHTML = '<i class="fa-solid fa-camera"></i> Front Camera <i class="fa-solid fa-circle" style="color: var(--primary);"></i>';
+                document.getElementById("stopCameraBtn").style.display = 'inline-flex';
+                document.getdocument.getElementById("camera-status").innerHTML = '<i class="fa-solid fa-camera"></i> Front Camera Active';
+                document.getElementById("camera-status").style.display = 'block';
+            } else if (activeCamera === 'back') {
+                document.getElementById("backCameraBtn").classList.add('active');
+                document.getElementById("backCameraBtn").innerHTML = '<i class="fa-solid fa-camera-retro"></i> Back Camera <i class="fa-solid fa-circle" style="color: var(--primary);"></i>';
+                document.getElementById("stopCameraBtn").style.display = 'inline-flex';
+                document.getElementById("camera-status").innerHTML = '<i class="fa-solid fa-camera-retro"></i> Back Camera Active';
+                document.getElementById("camera-status").style.display = 'block';
             }
         }
 
-        async function stopWebcam() {
-            await webcam.stop();
-            document.getElementById("webcam-container").removeChild(webcam.canvas);
-            if (labelContainer.contains(newlabel)) {
-                labelContainer.removeChild(newlabel);
-            }
+        async function initCamera() {
+            camera_on = true;
+            document.getElementById("action-buttons").style.display = "block";
+            await init();
         }
 
         async function init() {
@@ -402,8 +480,16 @@
             model = await tmImage.load(modelURL, metadataURL);
             maxPredictions = model.getTotalClasses();
 
-            const flip = true; 
-            webcam = new tmImage.Webcam(300, 300, flip); // Increased size for better UI
+            const flip = currentCameraType === 'user'; // Flip for front camera
+            webcam = new tmImage.Webcam(400, 400, flip); // Larger size for better mobile experience
+            
+            // Set facing mode for mobile cameras
+            webcam.videoConstraints = {
+                width: 400,
+                height: 400,
+                facingMode: currentCameraType // 'user' or 'environment'
+            };
+            
             await webcam.setup(); 
             await webcam.play();
             window.requestAnimationFrame(loop);
@@ -412,12 +498,17 @@
 
             newlabel = document.createElement("div");
             labelContainer = document.getElementById("label-container");
+            if (labelContainer.contains(newlabel)) {
+                labelContainer.removeChild(newlabel);
+            }
             labelContainer.appendChild(newlabel);
         }
 
         async function loop() {
-            webcam.update(); 
-            await predict(webcam.canvas);
+            if (camera_on && webcam) {
+                webcam.update(); 
+                await predict(webcam.canvas);
+            }
             window.requestAnimationFrame(loop);
         }
 
@@ -440,11 +531,11 @@
             // Custom styling for the prediction alert
             if (bestClass == "Fresh Banana" || bestClass == "Fresh Apple" || bestClass == "Fresh Orange") {
                 newlabel.className = "alert alert-success mt-3 p-3";
-                newlabel.innerHTML = `<i class="fa-solid fa-circle-check"></i> Detected: <strong>${bestClass}</strong>`;
+                newlabel.innerHTML = `<i class="fa-solid fa-circle-check"></i> Detected: <strong>${bestClass}</strong> (${(highestVal*100).toFixed(1)}%)`;
             }
             else {
                 newlabel.className = "alert alert-danger mt-3 p-3";
-                newlabel.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Detected: <strong>${bestClass}</strong>`;
+                newlabel.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i> Detected: <strong>${bestClass}</strong> (${(highestVal*100).toFixed(1)}%)`;
             }
 
             // Store prediction in memory
@@ -455,21 +546,26 @@
             currentPredictionData = {
                 fruit: fruit,
                 status: status,
-                confidence: highestVal
+                confidence: highestVal,
+                camera: currentCameraType === 'environment' ? 'Back' : 'Front'
             };
         }
 
         // --- Image Upload Functions ---
+        let img;
         async function getPredictions() {
             canvas = document.createElement("canvas");
             var context = canvas.getContext("2d");
-            canvas.width = "300"; // Increased size
-            canvas.height = "300"; // Increased size
-            context.drawImage(img, 0, 0, 300, 300); // Scale image to fit canvas
+            canvas.width = "400";
+            canvas.height = "400";
+            context.drawImage(img, 0, 0, 400, 400);
             document.getElementById("uploadedImage").appendChild(canvas);
 
             newlabel = document.createElement("div");
             labelContainer = document.getElementById("label-container");
+            if (labelContainer.contains(newlabel)) {
+                labelContainer.removeChild(newlabel);
+            }
             labelContainer.appendChild(newlabel);
 
             await predict(canvas);
@@ -527,6 +623,7 @@
                     let tbody = $("#tableBody");
                     
                     let confPercent = (currentPredictionData.confidence * 100).toFixed(0) + "%";
+                    let cameraUsed = currentPredictionData.camera || 'Unknown';
                     
                     // Custom styling for table text based on status
                     let statusColor = currentPredictionData.status === 'Fresh' ? 'color: var(--primary); font-weight: 800;' : 'color: var(--danger); font-weight: 800;';
@@ -535,6 +632,7 @@
                         <td style="font-weight: 600;">${currentPredictionData.fruit}</td>
                         <td style="${statusColor}">${currentPredictionData.status}</td>
                         <td>${confPercent}</td>
+                        <td style="color: var(--secondary); font-size: 0.85rem;">${cameraUsed}</td>
                     </tr>`;
                     
                     tbody.append(newRow);
@@ -550,21 +648,30 @@
                 }
 
                 let csvContent = "data:text/csv;charset=utf-8,";
-                csvContent += "Fruit,Status,Confidence\n"; 
+                csvContent += "Fruit,Status,Confidence,Camera\n"; 
 
                 scanHistory.forEach(function(row) {
                     let confPercent = (row.confidence * 100).toFixed(0) + "%";
-                    csvContent += `${row.fruit},${row.status},${confPercent}\n`;
+                    let cameraUsed = row.camera || 'Unknown';
+                    csvContent += `${row.fruit},${row.status},${confPercent},${cameraUsed}\n`;
                 });
 
                 let encodedUri = encodeURI(csvContent);
                 let link = document.createElement("a");
                 link.setAttribute("href", encodedUri);
-                link.setAttribute("download", "Fruitector_Scan_Results.csv");
+                link.setAttribute("download", `Fruitector_Scan_Results_${new Date().toISOString().slice(0,10)}.csv`);
                 document.body.appendChild(link); 
                 
                 link.click();
                 document.body.removeChild(link); 
+            });
+
+            // Handle window resize for better mobile experience
+            $(window).resize(function() {
+                if (webcam && camera_on) {
+                    webcam.canvas.width = Math.min(window.innerWidth * 0.8, 400);
+                    webcam.canvas.height = Math.min(window.innerWidth * 0.8, 400);
+                }
             });
         });
     </script>
